@@ -173,7 +173,40 @@ class _ProductListPageState extends State<ProductListPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('لوحة تحكم الماركت'),
+        title: FutureBuilder<double>(
+          future: db.getTotalOriginalStockValue(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Text("لوحة تحكم الماركت ...");
+            }
+            if (snapshot.hasError) {
+              return Text("خطأ في الحساب");
+            }
+
+            double total = snapshot.data ?? 0.0;
+
+            // ✅ التنسيق حسب النوع
+            String formattedValue = (total % 1 == 0)
+                ? total.toInt().toString()
+                : total.toStringAsFixed(2);
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "لوحة تحكم الماركت",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  "إجمالي السعر الأصلي: $formattedValue ج.م",
+                  style: TextStyle(fontSize: 14, color: Colors.black),
+                ),
+              ],
+            );
+          },
+        ),
+        centerTitle: false,
+
         actions: [
           InkWell(
             onTap: () async {

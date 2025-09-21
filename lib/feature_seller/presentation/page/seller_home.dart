@@ -242,13 +242,30 @@ class _CashierPageState extends State<CashierPage> {
       final qty = item['qty'] as int;
       final newQty = p.quantity - qty;
       if (newQty < 0) continue;
+      final newTotalOriginalPrice = p.originalPrice * newQty;
+
       final updated = Product(
+        originalPrice: p.originalPrice,
         id: p.id,
         name: p.name,
         price: p.price,
         quantity: newQty,
         barcode: p.barcode,
         expire: p.expire,
+        totalOriginalPrice: newTotalOriginalPrice, // ✅
+        allProductsOriginalTotal: 0, // مؤقت، هنحسبه بعدين
+      );
+      await db.updateProduct(updated);
+    }
+    final allProducts = await db.getAllProducts();
+    double allProductsOriginalTotal = 0;
+    for (var prod in allProducts) {
+      allProductsOriginalTotal += prod.totalOriginalPrice;
+    }
+    // ✅ حدث كل المنتجات بالإجمالي الكلي الجديد
+    for (var prod in allProducts) {
+      final updated = prod.copyWith(
+        allProductsOriginalTotal: allProductsOriginalTotal,
       );
       await db.updateProduct(updated);
     }
@@ -399,9 +416,14 @@ class _CashierPageState extends State<CashierPage> {
                 });
               },
               onSubmitted: (value) {
-                _addProductByBarcode(value.trim());
-                cashierReturnController.text = formatNumber(cashierReturn);
-                setState(() {});
+                if (value.trim().isEmpty) {
+                  // 🟢 لو الباركود فاضي انقل مباشرة لحقل الخصم
+                  FocusScope.of(context).requestFocus(discountFocusNode);
+                } else {
+                  _addProductByBarcode(value.trim());
+                  cashierReturnController.text = formatNumber(cashierReturn);
+                  setState(() {});
+                }
               },
             ),
           ),

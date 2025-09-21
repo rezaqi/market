@@ -19,6 +19,32 @@ class DBHelperAdmin {
     return _db!;
   }
 
+  Future<void> safeAddColumn(
+    Database db,
+    String table,
+    String column,
+    String type,
+  ) async {
+    final res = await db.rawQuery("PRAGMA table_info($table)");
+    final exists = res.any((col) => col['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $type');
+      print("✅ Column $column added to $table");
+    } else {
+      print("ℹ️ Column $column already exists in $table");
+    }
+  }
+
+  Future<List<Product>> getAllProducts() async {
+    final dbClient = await database;
+
+    final List<Map<String, dynamic>> maps = await dbClient.query('products');
+
+    return List.generate(maps.length, (i) {
+      return Product.fromMap(maps[i]);
+    });
+  }
+
   Future<List<Map<String, dynamic>>> searchInvoicesByNameOrBarcode(
     String query,
   ) async {
@@ -139,7 +165,7 @@ class DBHelperAdmin {
     return await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 5, // <- رفع إلى 5
+        version: 8, // <- رفع إلى 5
         onCreate: (db, version) async {
           // (حافظ على جداولك القديمة كما هي...)
           await db.execute('''CREATE TABLE invoices (
@@ -155,14 +181,15 @@ class DBHelperAdmin {
           )''');
 
           await db.execute('''CREATE TABLE products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            barcode TEXT,
-            price REAL,
-            quantity INTEGER DEFAULT 0,
-            category TEXT,
-            expire TEXT
-          )''');
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT,
+  barcode TEXT,
+  price REAL,
+  quantity INTEGER DEFAULT 0,
+  category TEXT,
+  expire TEXT
+)
+''');
 
           await db.execute('''CREATE TABLE shifts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -207,45 +234,74 @@ class DBHelperAdmin {
         },
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
-            await db.execute('ALTER TABLE products ADD COLUMN category TEXT');
+            await safeAddColumn(db, 'products', 'category', 'TEXT');
           }
+
           if (oldVersion < 3) {
-            await db.execute(
-              'ALTER TABLE invoices ADD COLUMN isDeleted INTEGER DEFAULT 0',
+            await safeAddColumn(
+              db,
+              'invoices',
+              'isDeleted',
+              'INTEGER DEFAULT 0',
             );
           }
+
           if (oldVersion < 4) {
-            await db.execute('ALTER TABLE products ADD COLUMN expire TEXT');
+            await safeAddColumn(db, 'products', 'expire', 'TEXT');
           }
+
           if (oldVersion < 5) {
-            // لو حد مثبت نسخة قديمة، ننشئ الجداول الجديدة
             await db.execute('''CREATE TABLE IF NOT EXISTS archived_invoices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            originalId INTEGER,
-            date TEXT,
-            total REAL,
-            discount REAL,
-            finalTotal REAL,
-            customerPaid REAL,
-            cashierReturn REAL,
-            items TEXT,
-            deletedAt TEXT
-          )''');
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      originalId INTEGER,
+      date TEXT,
+      total REAL,
+      discount REAL,
+      finalTotal REAL,
+      customerPaid REAL,
+      cashierReturn REAL,
+      items TEXT,
+      deletedAt TEXT
+    )''');
 
             await db.execute('''CREATE TABLE IF NOT EXISTS returns (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            invoiceId INTEGER,
-            date TEXT,
-            items TEXT,
-            refundedAmount REAL,
-            note TEXT,
-            isDeleted INTEGER DEFAULT 0
-          )''');
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoiceId INTEGER,
+      date TEXT,
+      items TEXT,
+      refundedAmount REAL,
+      note TEXT,
+      isDeleted INTEGER DEFAULT 0
+    )''');
           }
+
           if (oldVersion < 6) {
-            // لو العمود deleteAfter غير موجود، نضيفه
-            await db.execute('ALTER TABLE returns ADD COLUMN deleteAfter TEXT');
+            await safeAddColumn(db, 'returns', 'deleteAfter', 'TEXT');
           }
+          if (oldVersion < 7) {
+            await safeAddColumn(
+              db,
+              'products',
+              'originalPrice',
+              'REAL DEFAULT 0',
+            );
+          }
+          if (oldVersion < 8) {
+            await safeAddColumn(
+              db,
+              'products',
+              'totalOriginalPrice',
+              'REAL DEFAULT 0',
+            );
+            await safeAddColumn(
+              db,
+              'products',
+              'allProductsOriginalTotal',
+              'REAL DEFAULT 0',
+            );
+          }
+
+          print("✅ Upgrade done from v$oldVersion → v$newVersion");
         },
       ),
     );
@@ -862,5 +918,17 @@ class DBHelperAdmin {
   Future<void> deleteAllProducts() async {
     final dbClient = await database;
     await dbClient.delete('products');
+  }
+}
+
+extension DBHelperAdminAnalytics on DBHelperAdmin {
+  // دالة واحدة فقط لجلب إجمالي السعر الأصلي لكل المنتجات
+  Future<double> getTotalOriginalStockValue() async {
+    final db = await database;
+    final result = await db.rawQuery(
+      "SELECT SUM(originalPrice * quantity) as total FROM products",
+    );
+    final total = result.first["total"] as num?;
+    return total?.toDouble() ?? 0.0;
   }
 }

@@ -15,6 +15,8 @@ class AddEditProductPage extends StatefulWidget {
 
 class _AddEditProductPageState extends State<AddEditProductPage> {
   final _formKey = GlobalKey<FormState>();
+  final _originalPriceController = TextEditingController();
+  final _originalPriceFocus = FocusNode();
 
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
@@ -36,6 +38,10 @@ class _AddEditProductPageState extends State<AddEditProductPage> {
   void initState() {
     super.initState();
     if (widget.product != null) {
+      _originalPriceController.text = widget.product!.originalPrice % 1 == 0
+          ? widget.product!.originalPrice.toInt().toString()
+          : widget.product!.originalPrice.toString();
+
       _nameController.text = widget.product!.name;
       _priceController.text = widget.product!.price % 1 == 0
           ? widget.product!.price.toInt().toString()
@@ -48,6 +54,9 @@ class _AddEditProductPageState extends State<AddEditProductPage> {
 
   @override
   void dispose() {
+    _originalPriceController.dispose();
+    _originalPriceFocus.dispose();
+
     _nameController.dispose();
     _priceController.dispose();
     _barcodeController.dispose();
@@ -103,17 +112,42 @@ class _AddEditProductPageState extends State<AddEditProductPage> {
           ? double.parse(rawPrice)
           : int.parse(rawPrice).toDouble();
 
+      final rawOriginalPrice = _originalPriceController.text.trim();
+      final originalPrice = rawOriginalPrice.contains('.')
+          ? double.parse(rawOriginalPrice)
+          : int.parse(rawOriginalPrice).toDouble();
+
+      // ✅ تحقق: السعر الأصلي لا يكون أكبر من السعر
+      if (originalPrice > price) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("❌ السعر الأصلي لا يمكن أن يكون أكبر من السعر"),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return; // منع الحفظ
+      }
+
       final quantity = int.parse(_quantityController.text.trim());
       final barcode = _barcodeController.text.trim();
       final name = _nameController.text.trim();
-
+      final totalOriginalPrice = originalPrice * quantity;
+      final allProducts = await db.getAllProducts();
+      double allProductsOriginalTotal = totalOriginalPrice;
+      for (var p in allProducts) {
+        allProductsOriginalTotal += p.totalOriginalPrice;
+      }
       final product = Product(
+        originalPrice: originalPrice,
         id: widget.product?.id,
         name: name,
         price: price,
         quantity: quantity,
         barcode: barcode,
         expire: _expireDate,
+        totalOriginalPrice: totalOriginalPrice, // ✅
+        allProductsOriginalTotal: allProductsOriginalTotal, // ✅
       );
 
       // تحقق من وجود باركود بنفس القيمة في أي منتج آخر
@@ -195,11 +229,37 @@ class _AddEditProductPageState extends State<AddEditProductPage> {
                   decoration: InputDecoration(labelText: 'اسم المنتج'),
                   textInputAction: TextInputAction.next,
                   onFieldSubmitted: (_) {
-                    FocusScope.of(context).requestFocus(_priceFocus);
+                    FocusScope.of(context).requestFocus(_originalPriceFocus);
                   },
                   validator: (v) => (v == null || v.trim().isEmpty)
                       ? 'اكتب اسم المنتج'
                       : null,
+                ),
+                SizedBox(height: 12),
+                TextFormField(
+                  controller: _originalPriceController,
+                  focusNode: _originalPriceFocus,
+                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(
+                        r'^(0|[1-9]\d*)(\.\d{0,2})?$',
+                      ), // يقبل 0 أو أرقام صحيحة + عشريتين
+                    ),
+                  ],
+                  decoration: InputDecoration(labelText: 'السعر الأصلي'),
+                  textInputAction: TextInputAction.next,
+                  onFieldSubmitted: (_) {
+                    FocusScope.of(context).requestFocus(_priceFocus);
+                  },
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty)
+                      return 'اكتب السعر الأصلي';
+                    final val = double.tryParse(v);
+                    if (val == null) return 'السعر الأصلي غير صالح';
+                    if (val < 0) return 'السعر الأصلي لا يمكن أن يكون سالب';
+                    return null;
+                  },
                 ),
                 SizedBox(height: 12),
 

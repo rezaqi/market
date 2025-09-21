@@ -7,6 +7,9 @@ void showDetails(Product p, BuildContext context) {
     return value.toStringAsFixed(2);
   }
 
+  // 🟢 نحسب إجمالي الرصيد الأصلي
+  final originalTotal = p.originalPrice * p.quantity;
+
   showDialog(
     context: context,
     builder: (_) => AlertDialog(
@@ -21,14 +24,25 @@ void showDetails(Product p, BuildContext context) {
           ),
           SizedBox(height: 6),
           Text(
-            'السعر: ${formatNumber(p.price)} ',
+            'سعر البيع: ${formatNumber(p.price)}',
+            style: TextStyle(fontSize: 30),
+          ),
+          Text(
+            'اجمالى سعر البيع: ${formatNumber(p.price * p.quantity)}',
             style: TextStyle(fontSize: 30),
           ),
           SizedBox(height: 6),
           Text(
-            'الرصيد الموجود فى المخزن حاليا: ${p.quantity}',
-            style: TextStyle(fontSize: 30),
+            'السعر الأصلي: ${formatNumber(p.originalPrice)}',
+            style: TextStyle(fontSize: 30, color: Colors.blueGrey),
           ),
+          SizedBox(height: 6),
+          Text(
+            'اجمالى السعر الاصلى للمنتج : ${formatNumber(originalTotal)}',
+            style: TextStyle(fontSize: 30, color: Colors.teal),
+          ),
+          SizedBox(height: 6),
+          Text('الرصيد بالمخزن: ${p.quantity}', style: TextStyle(fontSize: 30)),
           SizedBox(height: 6),
           Text('الباركود: ${p.barcode}', style: TextStyle(fontSize: 30)),
           SizedBox(height: 6),
