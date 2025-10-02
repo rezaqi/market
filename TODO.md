@@ -1,0 +1,21 @@
+- [x] Kill any running market.exe processes
+- [x] Run flutter clean
+- [ ] Run flutter pub get
+- [ ] Run flutter run
+
+Fix Dart Compilation Errors:
+- [ ] Fix lib/core/class/app_color.dart: Add import 'dart:ui';
+- [ ] Fix lib/core/class/components.dart: Add import 'package:flutter/material.dart'; and import 'app_color.dart';
+- [ ] Fix lib/core/db_helper/db_helper.dart: Add imports for sqflite, path, path_provider;
+- [ ] Fix lib/feature_admin/add_product/add_product.dart: Add import 'package:flutter/material.dart';
+- [ ] Fix lib/feature_admin/change_acc/change_pass_user.dart: Add import 'package:flutter/material.dart';
+- [ ] Fix lib/feature_admin/home/data/source/dh_helper.dart: Add imports for sqflite, path, path_provider;
+- [ ] Fix lib/feature_admin/home/func/show_detils.dart: Add import 'package:flutter/material.dart';
+- [ ] Fix lib/feature_admin/home/home_admin.dart: Add import 'package:flutter/material.dart';
+- [ ] Fix lib/feature_admin/invoic/presentation/page/deleted_invoic.dart: Add import 'package:flutter/material.dart';
+- [ ] Fix lib/feature_admin/invoic/presentation/page/invoice_page.dart: Add import 'package:flutter/material.dart';
+- [ ] Fix lib/feature_admin/invoic/presentation/page/invoic_details.dart: Add import 'package:flutter/material.dart';
+- [ ] Fix lib/feature_admin/invoic/presentation/page/return_page.dart: Add import 'package:flutter/material.dart';
+- [ ] Fix lib/feature_admin/shift/shift_page.dart: Add import 'package:flutter/material.dart';
+- [ ] Run flutter analyze to check for remaining errors
+- [ ] Test build with flutter build apk

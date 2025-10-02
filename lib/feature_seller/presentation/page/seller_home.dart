@@ -125,6 +125,14 @@ class _CashierPageState extends State<CashierPage> {
       return;
     }
 
+    if (_isProductExpired(product)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("⚠️ المنتج منتهي الصلاحية")));
+      _resetBarcodeField();
+      return;
+    }
+
     final existing = cart.indexWhere(
       (item) => item['product'].id == product.id,
     );
@@ -179,6 +187,12 @@ class _CashierPageState extends State<CashierPage> {
   void _resetBarcodeField() {
     barcodeController.clear();
     FocusScope.of(context).requestFocus(barcodeFocusNode);
+  }
+
+  bool _isProductExpired(Product p) {
+    if (p.expire == null) return false;
+    final now = DateTime.now();
+    return p.expire!.isBefore(now);
   }
 
   num get totalPrice => cart.fold(0, (sum, item) {
@@ -237,72 +251,78 @@ class _CashierPageState extends State<CashierPage> {
       return;
     }
 
-    for (var item in cart) {
-      final p = item['product'] as Product;
-      final qty = item['qty'] as int;
-      final newQty = p.quantity - qty;
-      if (newQty < 0) continue;
-      final newTotalOriginalPrice = p.originalPrice * newQty;
+    try {
+      for (var item in cart) {
+        final p = item['product'] as Product;
+        final qty = item['qty'] as int;
+        final newQty = p.quantity - qty;
+        if (newQty < 0) continue;
+        final newTotalOriginalPrice = p.originalPrice * newQty;
 
-      final updated = Product(
-        originalPrice: p.originalPrice,
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        quantity: newQty,
-        barcode: p.barcode,
-        expire: p.expire,
-        totalOriginalPrice: newTotalOriginalPrice, // ✅
-        allProductsOriginalTotal: 0, // مؤقت، هنحسبه بعدين
+        final updated = Product(
+          originalPrice: p.originalPrice,
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          quantity: newQty,
+          barcode: p.barcode,
+          expire: p.expire,
+          totalOriginalPrice: newTotalOriginalPrice, // ✅
+          allProductsOriginalTotal: 0, // مؤقت، هنحسبه بعدين
+        );
+        await db.updateProduct(updated);
+      }
+      final allProducts = await db.getAllProducts();
+      double allProductsOriginalTotal = 0;
+      for (var prod in allProducts) {
+        allProductsOriginalTotal += prod.totalOriginalPrice;
+      }
+      // ✅ حدث كل المنتجات بالإجمالي الكلي الجديد
+      for (var prod in allProducts) {
+        final updated = prod.copyWith(
+          allProductsOriginalTotal: allProductsOriginalTotal,
+        );
+        await db.updateProduct(updated);
+      }
+
+      await db.insertInvoice({
+        "date": DateTime.now().toIso8601String(),
+        "total": totalPrice,
+        "discount": discount,
+        "finalTotal": finalTotal,
+        "customerPaid": customerPaid,
+        "cashierReturn": cashierReturn,
+        "items": cart.map((e) {
+          final p = e['product'] as Product;
+          return {
+            "id": p.id,
+            "name": p.name,
+            "price": p.price,
+            "qty": e['qty'],
+            "subtotal": p.price * e['qty'],
+            "barcode": p.barcode, // ✅ هنا ضيفنا الباركود
+          };
+        }).toList(),
+      });
+
+      await db.addSaleToShift(finalTotal);
+
+      setState(() {
+        cart.clear();
+        qtyFocusNodes.clear();
+        discountController.clear();
+        customerPaidController.clear();
+        cashierReturnController.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("✅ تمت عملية البيع وتخزين الفاتورة")),
       );
-      await db.updateProduct(updated);
-    }
-    final allProducts = await db.getAllProducts();
-    double allProductsOriginalTotal = 0;
-    for (var prod in allProducts) {
-      allProductsOriginalTotal += prod.totalOriginalPrice;
-    }
-    // ✅ حدث كل المنتجات بالإجمالي الكلي الجديد
-    for (var prod in allProducts) {
-      final updated = prod.copyWith(
-        allProductsOriginalTotal: allProductsOriginalTotal,
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ حدث خطأ أثناء إتمام البيع: \$e")),
       );
-      await db.updateProduct(updated);
     }
-
-    await db.insertInvoice({
-      "date": DateTime.now().toIso8601String(),
-      "total": totalPrice,
-      "discount": discount,
-      "finalTotal": finalTotal,
-      "customerPaid": customerPaid,
-      "cashierReturn": cashierReturn,
-      "items": cart.map((e) {
-        final p = e['product'] as Product;
-        return {
-          "id": p.id,
-          "name": p.name,
-          "price": p.price,
-          "qty": e['qty'],
-          "subtotal": p.price * e['qty'],
-          "barcode": p.barcode, // ✅ هنا ضيفنا الباركود
-        };
-      }).toList(),
-    });
-
-    await db.addSaleToShift(finalTotal);
-
-    setState(() {
-      cart.clear();
-      qtyFocusNodes.clear();
-      discountController.clear();
-      customerPaidController.clear();
-      cashierReturnController.clear();
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("✅ تمت عملية البيع وتخزين الفاتورة")),
-    );
   }
 
   // String formatNumber(num value) {
